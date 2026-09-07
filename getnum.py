@@ -9,3 +9,9 @@ contourPoints=data.get('contoursPts',[])
 
 array=np.array(contourPoints)
 print(array.shape)
+print(len(array))
+count=[]
+for i in range(len(array)):
+    count.append(i)
+print(count[-1])
+

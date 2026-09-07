@@ -1,7 +1,7 @@
 import base
 import os 
 
-basepath='/Users/hamzamahmoud/final/horses'
+basepath='/Users/hamzamahmoud/final/big_cats'
 camfile='camData.json'
 contourfile='contourData.json'
 for file in os.listdir(basepath):
