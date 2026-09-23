@@ -126,28 +126,28 @@ class snapshotAndContour(threeDobject):#resposible for taking the snap shots and
                  requiredScale*=padding
                  plotter.camera.parallel_scale=requiredScale
             
-            def getElevation(self,point,center):
-                 relativePoint= np.asarray(point) - np.asarray(center)
+            def getElevation(self,point,refCenter):
+                 
+                 relativePoint= np.asarray(point) - np.asarray(refCenter)
                  x,y,z=relativePoint[0],relativePoint[1],relativePoint[2]
-                 groundDist=math.sqrt(x**2+y**2)
-                 elevationRad=math.atan2(z,groundDist)
+                 groundDist=math.sqrt(x**2+z**2)
+                 elevationRad=math.atan2(y,groundDist)
                  elevationDeg=math.degrees(elevationRad)
                  return elevationDeg
 
-            def getAzimuth(self,point,center):
-                 relativePoint= np.asarray(point) - np.asarray(center)
-                 x,y= relativePoint[0],relativePoint[1]
-                 azimuthRad=math.atan2(y,x)
+            def getAzimuth(self,point,refCenter):
+                 
+                 relativePoint= np.asarray(point) - np.asarray(refCenter)
+                 x,z= relativePoint[0],relativePoint[2]
+                 azimuthRad=math.atan2(z,x)
                  return  math.degrees(azimuthRad)
-            def getMaxMinElevation(self,points,center):
-                 pointsInDegree=[]
-                 for point in points:
-                      pointsInDegree.append(self.getElevation(point,center))
-                      
-                 return np.max(pointsInDegree),np.min(pointsInDegree)
+            
                 
-            def snapshots(self):#reponsible for taking the snap shots of the object at the vertcies of the dome taking the contours using helper functions
-                center=np.asarray(self.obj.center_of_mass())
+            def snapshots(self,lowerBound=0,upperBound=90):#reponsible for taking the snap shots of the object at the vertcies of the dome taking the contours using helper functions
+                centerMass=np.asarray(self.obj.center_of_mass())
+                points=np.asarray(self.dome.vertices)
+                domeBaseY= np.min(points[:,1])
+                domeCenterRef = np.array([centerMass[0],domeBaseY,centerMass[2]])
                 os.makedirs('snapshots',exist_ok=True)
                 print('processing object')
                 plotter = pv.Plotter(
@@ -165,28 +165,21 @@ class snapshotAndContour(threeDobject):#resposible for taking the snap shots and
                 plotter.camera.enable_parallel_projection()
                 points=np.asarray(self.dome.vertices)
                 
-                maxElevation,minElevation=self.getMaxMinElevation(points,center)
-                request=input(f'enter 1 if you would like to add boundries for the camaera max elevation:{maxElevation:.2f} and min elevation {minElevation:.2f} and 0 if your would like to take all snap shots: ')
                 
-                useboundries = (request =='1')
-                if useboundries:
-                     minElvation=float(input('eneter the minimum elevatiion in degrees: '))
-                     maxElvation= float(input('eneter the maximmum elevation in degrees: '))
-
                 contours=[]
                 contoursData=[]
                 print('taking contours....')
                 for i ,point in enumerate(points):
-                    elevation=self.getElevation(point,center)
-                    if useboundries:
-                         if not (minElvation <= elevation <= maxElvation):
-                              continue 
+                    elevation=self.getElevation(point,domeCenterRef)
+                    
+                    if not (lowerBound <= elevation <= upperBound):
+                            continue 
                         
                     campos=np.asarray(point)
                     plotter.camera.position = campos
-                    plotter.camera.focal_point = center
+                    plotter.camera.focal_point = centerMass
 
-                    forward = center - campos
+                    forward = centerMass - campos
                     forward /= np.linalg.norm(forward)
 
                     if abs(np.dot(forward, [0, 1, 0])) > 0.98:
@@ -197,7 +190,7 @@ class snapshotAndContour(threeDobject):#resposible for taking the snap shots and
                     plotter.camera.up = up
                     
                     
-                    azimuth=self.getAzimuth(point,center)
+                    azimuth=self.getAzimuth(point,domeCenterRef)
                     self.fitObjToCamera(plotter,self.obj)
                     filename = f"snapshots/{self.objname}_azimuth:{azimuth:.2f}_elevation:{elevation:.2f}_index:{i}.png"
 
@@ -208,8 +201,8 @@ class snapshotAndContour(threeDobject):#resposible for taking the snap shots and
 
                     
                     contour=self.takecontour(filename)
-                    centerMass=self.get2dCenterMass(contour)
-                    startidx=self.findStartingPoint(contour,centerMass)
+                    ContourCenterMass=self.get2dCenterMass(contour)
+                    startidx=self.findStartingPoint(contour,ContourCenterMass)
                     newcontour=self.equalSpacedPoints(contour,startidx)
                     newcontour=self.normalizepts(newcontour)
                     contours.append(newcontour)
@@ -318,34 +311,6 @@ class snapshotAndContour(threeDobject):#resposible for taking the snap shots and
 
                     return ptsScalled 
             
-            def drawPoints(self,imgPath):#draws the points in a gradinat color green-blue-red green = start and red = end 
-
-                contour = self.takecontour(imgPath)
-                
-                centerMass = self.get2dCenterMass(contour)
-
-                startingIndex = self.findStartingPoint(
-                        contour,
-                        centerMass
-                    )
-                
-                newcontour=self.equalSpacedPoints(contour,startingIndex)
-                newcontour=self.normalizepts(newcontour)
-                plt.clf()
-                n=len(newcontour)
-                colors=np.linspace(0,1,n)
-
-                bright_gbr = LinearSegmentedColormap.from_list(
-                    'bright_gbr',
-                    ['lime', 'blue', 'red']
-                )
-                plt.figure(figsize=(14, 10))
-
-                plt.scatter(newcontour[:,0],newcontour[:,1],c=colors,cmap=bright_gbr,s=10)
-                plt.gca().invert_yaxis()
-                plt.axis('off')
-                plt.axis('equal')
-                return 
             def saveJson(self,camDatafile,contourfile,camdata,contourdata):
                 if not os.path.exists(camDatafile) or os.path.getsize(camDatafile) ==0: 
                     with open (camDatafile,'w') as f:
@@ -371,14 +336,30 @@ class snapshotAndContour(threeDobject):#resposible for taking the snap shots and
                 with open (contourfile,'w') as file:
                    json.dump(contourData,file,indent=2)
 
-            def savefig(self,fileName,folder ):#saves the matplot lib figure 
+
+class contourVisualizer:
+    def __init__(self):
+        pass 
+    def drawPoints(self,points):#draws the points in a gradinat color green-blue-red green = start and red = end 
+
+        plt.clf()
+        n=len(points)
+        colors=np.linspace(0,1,n)
+
+        bright_gbr = LinearSegmentedColormap.from_list('bright_gbr',['lime', 'blue', 'red'])
+        plt.figure(figsize=(14, 10))
+
+        plt.scatter(points[:,0],points[:,1],c=colors,cmap=bright_gbr,s=10)
+        plt.gca().invert_yaxis()
+        plt.axis('off')
+        plt.axis('equal')
+    def savefig(self,fileName,folder='savedcontour' ):#saves the matplot lib figure 
          
-                os.makedirs(folder,exist_ok=True)
-                filePath=os.path.join(folder,fileName)
-                plt.savefig(filePath,bbox_inches='tight')
-                plt.close()
-            
-                      
+        os.makedirs(folder,exist_ok=True)
+        filePath=os.path.join(folder,fileName)
+        plt.savefig(filePath,bbox_inches='tight')
+        plt.close()
+                              
             
 
            
