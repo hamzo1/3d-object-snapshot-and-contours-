@@ -116,8 +116,8 @@ class snapshotAndContour(threeDobject):#resposible for taking the snap shots and
                  right = np.cross(forward,up)
                  right/=np.linalg.norm(right)
                  relative = points- cameraPos
-                 x= relative @ right
-                 y=relative @ up
+                 x= np.dot(relative,right)
+                 y=np.dot(relative,up)
                  width=x.max()-x.min()
                  hieght=y.max()-y.min()
                  windowWidth,windowHieght=plotter.window_size
