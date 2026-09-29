@@ -2,7 +2,7 @@ from base import contourVisualizer as vis
 
 import json 
 import numpy as np 
-# the perpous of this file is to loop through the file teh contour data file and cam data and save it as the img of the contour
+# the perpous of this file is to loop through the  contour data file and cam data and save it as the img of the contour
 
 basename='contourimg'
 visualize=vis()#create an instance of the class
