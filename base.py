@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt# used for ploting the contour
 from matplotlib.colors import LinearSegmentedColormap
 import math#using it for doing math like finding azimuth and elevation 
 import json#using it for adding files to json 
+from geodome import GeodesicDome
 
 
 
@@ -20,10 +21,7 @@ class parentsfunctions:
         getPoints=np.asarray(mesh.vertices)
 
         getMean=np.mean(getPoints,axis=0)
-
         center= getPoints - getMean
-        
-
         distance=np.linalg.norm(center,axis=1)
         stdDist=np.std(distance)
 
@@ -33,17 +31,10 @@ class parentsfunctions:
     def convertToPyvista(self,obj):#converts trimesh object to pyvista to take snap shot 
         vertices = np.asarray(obj.vertices)
         faces= np.asarray(obj.faces)
-        facesPv = np.hstack([np.full((len(faces),1),3),faces])
+        facesPv = np.hstack([np.full((len(faces),1),3),faces]).ravel()
         pvObj=pv.PolyData(vertices,facesPv)
         return pvObj
     
-    def centerDomeWithobj(self,obj):# centers the dome with the object
-        dome=trimesh.load('flexDOme.obj')
-        dome=self.normalizeobj(dome)
-        centerMass=obj.center_mass
-        dome.apply_translation(centerMass)
-        self.scalObj(obj,dome)
-        return dome
     
     def loadobj(self,object,flip=False):# loads objects files 
         mesh=trimesh.load(object,force='mesh')
@@ -52,46 +43,66 @@ class parentsfunctions:
              rotaion=trimesh.transformations.rotation_matrix(np.pi,[0,0,1])
              obj.apply_transform(rotaion)
 
-        dome=self.centerDomeWithobj(obj)
-        objPv=self.convertToPyvista(obj)
-        return objPv,dome
+        return obj
+    def Create_spehere(self):
+        sphere=GeodesicDome(freq=3)
+        vertices = np.array(sphere.get_vertices())#get vertcies 
+        triangles = np.array(sphere.get_triangles())#get triangles 
+        spheremesh = trimesh.Trimesh(vertices=vertices,faces=triangles,process=True)#makes the sphere as a mesh 
+        spheremesh.apply_translation(-spheremesh.vertices.mean(axis=0))# applies the translation to be at point (0,0,0)
+        return spheremesh
+    
+    def sliceSphere(self,sphere,groundY=0.0):
+        planeOregin=np.array([0.0,groundY,0.0])
+        planeNormal=np.array([0.0,1.0,0.0])
+ 
+        dome=sphere.slice_plane(planeOregin,planeNormal,cap=False)
+        dome.merge_vertices()#the slice repeats vertices along the cut which would make duplicate camera views
+        return dome
+
 
     def getCenterMass(self, mesh):#gets center mass of object 
             vertices = np.asarray(mesh.vertices)
-            faces = np.asarray(mesh.triangles)
+            faces = np.asarray(mesh.faces)
             tmesh = trimesh.Trimesh(vertices=vertices, faces=faces)
             return tmesh.center_mass
-    def scalObj(self,obj,dome):#the function that scales the objects to be 2x the size of the dome
-            dome_diameter = dome.extents[0] 
-
-        # 2. Get the current length of your object (Z-axis extent)
-            current_obj_length = obj.extents[2] 
-
-        # 3. Calculate your target length (2x smaller than the dome's diameter)
-            target_obj_length = dome_diameter / 2.0
-
-        # 4. Calculate the scale multiplier
-            scale_factor = target_obj_length / current_obj_length
-            obj.apply_scale(scale_factor)
-    
-         
-
-         
-
+    def scalObj(self, obj, dome, fraction=0.5):
         
+        dome_diameter = dome.extents.max()
+        target_length = dome_diameter * fraction
+        scale_factor = target_length / obj.extents.max()
+        obj.apply_scale(scale_factor)
+
+    def PlaceOnGround(self,obj,groundLevel,sphereCenter,upaxis=1):
+        centerMass = self.getCenterMass(obj)
+        offSet= np.asarray(sphereCenter,dtype=float)-centerMass
+        offSet[upaxis]= groundLevel - obj.bounds[0][upaxis]
+        obj.apply_translation(offSet)
+        
+    
     
 class threeDobject(parentsfunctions):
         def __init__(self,objName,flip=False):
             super().__init__()
-            self.obj,self.dome=self.loadobj(objName,flip=flip)
+            self.mesh=self.loadobj(objName,flip=flip)
+            self.sphere= self.Create_spehere()
+            self.dome=None
+            self.obj=None
+            self.addDomeOnObj()
            
         
         
-        def addDomeOnObj(self,obj,dome):#added the dome over the object by normalizing them then moving the dome to the objects center mass
-            self.normalizeobj(self.obj)
-            self.normalizeobj(self.dome)
-            centerMass=self.getCenterMass(self.obj)
-            self.dome.translate(centerMass,relative=False)
+        def addDomeOnObj(self):#added the dome over the object by normalizing them then moving the dome to the objects center mass
+            sphereCenter= self.sphere.vertices.mean(axis=0)
+            groundY= sphereCenter[1]
+            self.dome= self.sliceSphere(self.sphere,groundY)
+            self.scalObj(self.mesh,self.sphere)
+            self.PlaceOnGround(self.mesh,groundY,sphereCenter)
+            self.obj=self.convertToPyvista(self.mesh)
+            
+            
+    
+
         
 
 
@@ -115,11 +126,12 @@ class snapshotAndContour(threeDobject):#resposible for taking the snap shots and
                  up/=np.linalg.norm(up)
                  right = np.cross(forward,up)
                  right/=np.linalg.norm(right)
-                 relative = points- cameraPos
+                 up=np.cross(right,forward)#the real up direction of the screen since the world up is not perpendicular to the view
+                 relative = points- focal#measured from the focal point because that is the center of the image
                  x= np.dot(relative,right)
                  y=np.dot(relative,up)
-                 width=x.max()-x.min()
-                 hieght=y.max()-y.min()
+                 width=np.abs(x).max()#half the width of the view needed since parallel_scale is half the image height
+                 hieght=np.abs(y).max()
                  windowWidth,windowHieght=plotter.window_size
                  aspect = windowWidth/windowHieght
                  requiredScale=max(hieght,width/aspect)
@@ -144,7 +156,7 @@ class snapshotAndContour(threeDobject):#resposible for taking the snap shots and
             
                 
             def snapshots(self,lowerBound=0,upperBound=90):#reponsible for taking the snap shots of the object at the vertcies of the dome taking the contours using helper functions
-                centerMass=np.asarray(self.obj.center_of_mass())
+                centerMass=self.getCenterMass(self.mesh)
                 points=np.asarray(self.dome.vertices)
                 domeBaseY= np.min(points[:,1])
                 domeCenterRef = np.array([centerMass[0],domeBaseY,centerMass[2]])

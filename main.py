@@ -1,26 +1,19 @@
 import base
 import os
-import glob
-outputBasePath = '/Users/hamzamahmoud/final/contours_output'
-file='wolf_alph3.obj'
-processThreeD=base.snapshotAndContour(file,flip=True)
-snapshotdir=processThreeD.snapshots()
 
-foldername=input('enter folder name:')
-savefolder=os.path.join(outputBasePath,foldername)
-imgfiles=sorted(glob.glob(os.path.join(snapshotdir,'*.png')))
-if imgfiles:
-    for imgpath in imgfiles:
-        basename = os.path.splitext(os.path.basename(imgpath))[0]
-        try:
-            contour = processThreeD.drawPoints(imgpath)
-            saveName = f'{basename}.png'
-            processThreeD.savecontour(saveName, savefolder)
-        except Exception as e:
-            print(f'Error: {e}')
-    print(f"Finished '{file}'. Contour plots saved to '{savefolder}'")
-else:
-    print("No snapshot images were found to process.")
+basepath='/Users/hamzamahmoud/final/3dObjects'
+camfile='camData.json'
+contourfile='contourData.json'
+flipFolders=['big_cats','cows','dogs','horses','hippos']# objects in these folders are inverted so they get flipped before taking the snapshots
 
-
-
+for folder,subfolders,files in os.walk(basepath):#goes through 3dObjects and all the folders in it
+    flip=os.path.basename(folder) in flipFolders
+    for file in sorted(files):
+        if file.endswith('.obj'):
+            filePath=os.path.join(folder,file)
+            print(filePath,'flip:',flip)
+            processThreeD=base.snapshotAndContour(filePath,flip)
+            contourdata,camdata= processThreeD.snapshots(0,85)#takes the snapshots at elevations between 0 and 85
+            processThreeD.saveJson(camfile,contourfile,camdata,contourdata)#saves the contour points and camera data in the json files
+            print(contourdata.shape)
+print('success')
