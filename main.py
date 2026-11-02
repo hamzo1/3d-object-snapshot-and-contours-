@@ -1,15 +1,19 @@
 import base
 import os
-outputBasePath = '/Users/hamzamahmoud/final/contours_output'
-file='/Users/hamzamahmoud/final/dogs/wolf_alph3.obj'
-processThreeD=base.snapshotAndContour(file,flip=True)
-contours,contoursData=processThreeD.snapshots()
 
-foldername=input('enter folder name:')
-savefolder=os.path.join(outputBasePath,foldername)
-visualize=base.contourVisualizer()
-for points,data in zip(contours,contoursData):
-    saveName = f"{data['name']}_azimuth:{data['azimuth']:.2f}_elevation:{data['elevation']:.2f}_index:{data['camViewNum']}.png"
-    visualize.drawPoints(points)
-    visualize.savefig(saveName,savefolder)
-print(f"Finished '{file}'. Contour plots saved to '{savefolder}'")
+basepath='/Users/hamzamahmoud/final/3dObjects'
+camfile='camData.json'
+contourfile='contourData.json'
+flipFolders=['big_cats','cows','dogs','horses','hippos']# objects in these folders are inverted so they get flipped before taking the snapshots
+
+for folder,subfolders,files in os.walk(basepath):#goes through 3dObjects and all the folders in it
+    flip=os.path.basename(folder) in flipFolders
+    for file in sorted(files):
+        if file.endswith('.obj'):
+            filePath=os.path.join(folder,file)
+            print(filePath,'flip:',flip)
+            processThreeD=base.snapshotAndContour(filePath,flip)
+            contourdata,camdata= processThreeD.snapshots(0,85)#takes the snapshots at elevations between 0 and 85
+            processThreeD.saveJson(camfile,contourfile,camdata,contourdata)#saves the contour points and camera data in the json files
+            print(contourdata.shape)
+print('success')
