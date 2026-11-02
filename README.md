@@ -19,6 +19,7 @@ A tool for building contour datasets for computer vision and machine learning re
 | **NumPy** | Array handling |
 | **Matplotlib** | Draw contours (optional, for visualization) |
 | **json** | Read and write the dataset files |
+| **GeodasicDome| creates the geodasic domes for the objects
 
 ## Input Files
 
